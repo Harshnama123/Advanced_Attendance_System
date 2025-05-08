@@ -1,0 +1,195 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container py-4">
+    <!-- Welcome Block -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card welcome-card bg-primary text-white">
+                <div class="card-body p-4">
+                    <div class="d-flex align-items-center">
+                        <i class="fas fa-user-circle fa-3x me-3"></i>
+                        <div>
+                            <h3 class="mb-1">Welcome back, {{ username }}</h3>
+                            <p class="mb-0 opacity-75">Manage your class attendance efficiently</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Analytics Cards -->
+    <div class="row g-4 mb-4">
+        <div class="col-md-3">
+            <div class="card shadow-sm text-center">
+                <div class="card-body">
+                    <div class="display-5 mb-2">✅</div>
+                    <h5 class="card-title">Total Students</h5>
+                    <div class="fs-3 fw-bold">{{ total_students or 0 }}</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card shadow-sm text-center">
+                <div class="card-body">
+                    <div class="display-5 mb-2 text-success">🟢</div>
+                    <h5 class="card-title">Attendance % This Month</h5>
+                    <div class="fs-3 fw-bold">{{ attendance_percent or 0 }}%</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card shadow-sm text-center">
+                <div class="card-body">
+                    <div class="display-5 mb-2 text-danger">🔴</div>
+                    <h5 class="card-title">Absent Today</h5>
+                    <div class="fs-3 fw-bold">{{ absent_today or 0 }}</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card shadow-sm text-center">
+                <div class="card-body">
+                    <div class="display-5 mb-2 text-info">📸</div>
+                    <h5 class="card-title">Image Accuracy %</h5>
+                    <div class="fs-3 fw-bold">{{ image_accuracy or 0 }}%</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-4">
+        <div class="col-md-6 col-lg-4">
+            <div class="card h-100">
+                <div class="card-body text-center p-4">
+                    <i class="fas fa-chalkboard-teacher fa-3x text-success mb-3"></i>
+                    <h4 class="card-title mb-3">Class Management</h4>
+                    <p class="card-text text-muted mb-4">Create and manage your classes</p>
+                    <a href="{{ url_for('manage_classes') }}" class="btn btn-success w-100">
+                        <i class="fas fa-plus-circle me-2"></i>Manage Classes
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-6 col-lg-4">
+            <div class="card h-100">
+                <div class="card-body text-center p-4">
+                    <i class="fas fa-user-graduate fa-3x text-primary mb-3"></i>
+                    <h4 class="card-title mb-3">Student Registration</h4>
+                    <p class="card-text text-muted mb-4">Add new students to the system</p>
+                    <a href="{{ url_for('register_student') }}" class="btn btn-primary w-100">
+                        <i class="fas fa-user-plus me-2"></i>Register Student
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-6 col-lg-4">
+            <div class="card h-100">
+                <div class="card-body text-center p-4">
+                    <i class="fas fa-users fa-3x text-info mb-3"></i>
+                    <h4 class="card-title mb-3">View Students</h4>
+                    <p class="card-text text-muted mb-4">Manage registered students</p>
+                    <a href="{{ url_for('view_students') }}" class="btn btn-info w-100 text-white">
+                        <i class="fas fa-list me-2"></i>View Students
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-6 col-lg-4">
+            <div class="card h-100">
+                <div class="card-body text-center p-4">
+                    <i class="fas fa-clipboard-check fa-3x text-warning mb-3"></i>
+                    <h4 class="card-title mb-3">Manual Attendance</h4>
+                    <p class="card-text text-muted mb-4">Mark attendance manually</p>
+                    <a href="{{ url_for('mark_attendance_manual') }}" class="btn btn-warning w-100 text-white">
+                        <i class="fas fa-check-circle me-2"></i>Mark Manual
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-6 col-lg-4">
+            <div class="card h-100">
+                <div class="card-body text-center p-4">
+                    <i class="fas fa-camera fa-3x text-danger mb-3"></i>
+                    <h4 class="card-title mb-3">Image Attendance</h4>
+                    <p class="card-text text-muted mb-4">Mark attendance using images</p>
+                    <a href="{{ url_for('mark_attendance_image') }}" class="btn btn-danger w-100">
+                        <i class="fas fa-image me-2"></i>Mark with Image
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-6 col-lg-4">
+            <div class="card h-100">
+                <div class="card-body text-center p-4">
+                    <i class="fas fa-chart-bar fa-3x text-purple mb-3"></i>
+                    <h4 class="card-title mb-3">View Attendance</h4>
+                    <p class="card-text text-muted mb-4">Check attendance records</p>
+                    <a href="{{ url_for('view_attendance') }}" class="btn btn-purple w-100">
+                        <i class="fas fa-history me-2"></i>View Records
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .welcome-card {
+        background: linear-gradient(135deg, var(--primary-color), var(--secondary-color)) !important;
+        border: none;
+        margin-bottom: 2rem;
+    }
+    
+    .btn-purple {
+        background-color: #7952b3;
+        color: white;
+    }
+    
+    .btn-purple:hover {
+        background-color: #614092;
+        color: white;
+    }
+    
+    .text-purple {
+        color: #7952b3;
+    }
+    
+    .card {
+        border: none;
+        transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }
+    
+    .card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 8px 15px rgba(0,0,0,0.1);
+    }
+    
+    .card-body {
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+    }
+    
+    .btn {
+        text-transform: none;
+        font-weight: 500;
+        padding: 0.75rem 1.5rem;
+        border-radius: 8px;
+    }
+    
+    .fa-3x {
+        transition: transform 0.3s ease;
+    }
+    
+    .card:hover .fa-3x {
+        transform: scale(1.1);
+    }
+</style>
+{% endblock %}
