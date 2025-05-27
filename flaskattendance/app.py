@@ -1,8 +1,9 @@
-from flask import Flask, render_template, request, redirect, url_for, flash
+from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, send_from_directory
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
-from database import teachers_collection, students_collection, classes_collection
+from database import teachers_collection, students_collection, classes_collection, attendance_collection
 from bson.objectid import ObjectId
 import os
+from dotenv import load_dotenv
 import uuid
 from flask import Flask, render_template, request, redirect, session, url_for
 from pymongo import MongoClient
@@ -11,19 +12,117 @@ from encode_faces import register_face, delete_face_encoding
 from database import attendance_collection
 from datetime import datetime
 import face_recognition
-import cv2
 import numpy as np
 from datetime import datetime
 from collections import defaultdict
 from bson import ObjectId
 import pickle
+from openpyxl import Workbook, load_workbook
+from openpyxl.styles import Font, Alignment, PatternFill
+import os.path
 
+# Load environment variables
+load_dotenv()
 
+# Initialize database with admin user
+from init_db import init_db
+init_db()
 
+# Create directory for Excel sheets
+EXCEL_FOLDER = 'static/attendance_sheets'
+os.makedirs(EXCEL_FOLDER, exist_ok=True)
 
+def save_to_excel(class_id, records):
+    """
+    Save attendance records to Excel file organized by class
+    """
+    try:
+        class_info = classes_collection.find_one({"_id": ObjectId(class_id)})
+        if not class_info:
+            print("Error: Class not found")
+            return None
+        
+        # Create a valid filename (remove any invalid characters)
+        class_name = "".join([c for c in class_info['name'] if c.isalnum() or c in (' ', '-', '_')])
+        excel_path = os.path.join(EXCEL_FOLDER, f"{class_name}_attendance.xlsx")
+        
+        # Ensure the directory exists
+        os.makedirs(os.path.dirname(excel_path), exist_ok=True)
+        
+        # Load existing workbook or create new one
+        if os.path.exists(excel_path):
+            wb = load_workbook(excel_path)
+        else:
+            wb = Workbook()
+            # Set up header style
+            header_font = Font(bold=True)
+            header_fill = PatternFill(start_color="CCE5FF", end_color="CCE5FF", fill_type="solid")
+            
+            # Create and style the header row
+            ws = wb.active
+            ws.title = class_name
+            headers = ['Date', 'Time', 'Roll No', 'Name', 'Status', 'Source']
+            for col, header in enumerate(headers, 1):
+                cell = ws.cell(row=1, column=col, value=header)
+                cell.font = header_font
+                cell.fill = header_fill
+                cell.alignment = Alignment(horizontal='center')
+
+        ws = wb.active
+        next_row = ws.max_row + 1
+
+        # Add new records
+        for record in records:
+            row_data = [
+                record['date'],
+                record['time'],
+                record['roll_no'],
+                record['name'],
+                record['status'],
+                record.get('source', 'unknown')
+            ]
+            for col, value in enumerate(row_data, 1):
+                cell = ws.cell(row=next_row, column=col, value=value)
+                cell.alignment = Alignment(horizontal='center')
+                # Highlight present/absent status
+                if col == 5:  # Status column
+                    if value == 'Present':
+                        cell.fill = PatternFill(start_color="C6EFCE", end_color="C6EFCE", fill_type="solid")
+                    else:
+                        cell.fill = PatternFill(start_color="FFC7CE", end_color="FFC7CE", fill_type="solid")
+            next_row += 1
+
+        # Adjust column widths
+        for column in ws.columns:
+            max_length = 0
+            column = [cell for cell in column]
+            try:
+                max_length = max(len(str(cell.value)) for cell in column if cell.value)
+            except ValueError:
+                max_length = 10
+            adjusted_width = (max_length + 2)
+            ws.column_dimensions[column[0].column_letter].width = adjusted_width
+
+        # Save the workbook
+        wb.save(excel_path)
+        print(f"Excel file saved successfully: {excel_path}")
+        return excel_path
+    except Exception as e:
+        print(f"Error saving Excel file: {str(e)}")
+        return None
 
 app = Flask(__name__)
-app.secret_key = "supersecret"
+app.secret_key = os.getenv('SECRET_KEY', 'supersecret')  # Use environment variable for secret key
+
+# Create directories if they don't exist
+UPLOAD_FOLDER = 'static/student_photos'
+EXCEL_FOLDER = 'static/attendance_sheets'
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+os.makedirs(EXCEL_FOLDER, exist_ok=True)
+os.makedirs('encodings', exist_ok=True)
+os.makedirs('static/class_photos', exist_ok=True)
+
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
 login_manager = LoginManager()
 login_manager.login_view = "login"
@@ -353,7 +452,7 @@ def mark_attendance_manual():
         marked = request.form.getlist('attendance')
         today = datetime.now().strftime('%Y-%m-%d')
         now_time = datetime.now().strftime('%H:%M:%S')
-        
+        records_to_insert = []
         for student in students:
             record = {
                 'date': today,
@@ -364,10 +463,22 @@ def mark_attendance_manual():
                 'name': student['name'],
                 'status': 'Present' if student['roll_no'] in marked else 'Absent'
             }
-            attendance_collection.insert_one(record)
-        flash("Attendance marked manually.")
-        return redirect('/dashboard')
+            records_to_insert.append(record)
         
+        if records_to_insert:
+            attendance_collection.insert_many(records_to_insert)
+
+        # Save to Excel
+        attendance_records = list(attendance_collection.find({
+            'date': today,
+            'time': now_time,
+            'class_id': ObjectId(selected_class)
+        }))
+        excel_path = save_to_excel(selected_class, attendance_records)
+        
+        flash("Attendance marked manually and saved to Excel.")
+        return redirect('/dashboard')
+    
     return render_template('mark_attendance_manual.html', 
                          students=students, 
                          classes=classes, 
@@ -415,10 +526,11 @@ def mark_attendance_image():
                             recognized_rolls.add(roll_numbers[i])
                             break
 
-        # Mark attendance for students in the selected class
+        # Mark attendance for students using batch insertion
         today = datetime.now().strftime('%Y-%m-%d')
         now_time = datetime.now().strftime('%H:%M:%S')
-
+        
+        records_to_insert = []
         for student in students_in_class:
             record = {
                 'date': today,
@@ -429,9 +541,20 @@ def mark_attendance_image():
                 'name': student['name'],
                 'status': 'Present' if student['roll_no'] in recognized_rolls else 'Absent'
             }
-            attendance_collection.insert_one(record)
+            records_to_insert.append(record)
+        
+        if records_to_insert:
+            attendance_collection.insert_many(records_to_insert)
 
-        flash(f"Attendance marked for {len(recognized_rolls)} students in the selected class.")
+        # Save to Excel
+        attendance_records = list(attendance_collection.find({
+            'date': today,
+            'time': now_time,
+            'class_id': ObjectId(selected_class)
+        }))
+        excel_path = save_to_excel(selected_class, attendance_records)
+
+        flash(f"Attendance marked for {len(recognized_rolls)} students and saved to Excel.")
         return redirect('/dashboard')
 
     return render_template('mark_attendance_image.html', 
@@ -531,12 +654,20 @@ def view_attendance_session_all(date, time, class_id):
     # --- Add photo_path to each attendance record ---
     student_photo_map = {s['roll_no']: s.get('photo_path') for s in students_collection.find({}, {'roll_no': 1, 'photo_path': 1})}
     for record in records:
-        record['photo_path'] = student_photo_map.get(record['roll_no'], None)
+        record['photo_path'] = student_photo_map.get(record['roll_no'], None)    # Get Excel file path
+    class_name = class_info['name'] if class_info else ''
+    # Sanitize class name for filename
+    safe_class_name = "".join(c for c in class_name if c.isalnum() or c in (' ', '-', '_')).strip()
+    excel_filename = f"{safe_class_name}_attendance.xlsx"
+    # Use forward slashes for URL path
+    excel_path = f"attendance_sheets/{excel_filename}"
+
     return render_template("view_attendance_session.html", 
                          records=records, 
                          date=date, 
                          time=time, 
-                         class_name=class_info['name'] if class_info else None)
+                         class_name=class_name,
+                         excel_path=excel_path)
 
 # View Attendance (Step 3 - Session Attendance)
 @app.route('/view_attendance/session/<source>/<date>/<time>')
@@ -692,6 +823,135 @@ def delete_attendance_session(class_id, date, time):
     })
     flash('Attendance session deleted.', 'success')
     return redirect(request.referrer or url_for('view_attendance'))
+
+@app.route('/live_attendance', methods=['GET'])
+@login_required
+def live_attendance():
+    selected_class = request.args.get('class_id', None)
+    classes = list(classes_collection.find({"created_by": current_user.id}))
+    return render_template('live_attendance.html', 
+                         classes=classes, 
+                         selected_class=selected_class)
+
+@app.route('/process_frame', methods=['POST'])
+@login_required
+def process_frame():
+    if 'frame' not in request.files:
+        return jsonify({'error': 'No frame provided'}), 400
+
+    class_id = request.form.get('class_id')
+    if not class_id:
+        return jsonify({'error': 'No class selected'}), 400
+
+    frame = request.files['frame']
+    frame_path = os.path.join('static/class_photos', 'temp_frame.jpg')
+    frame.save(frame_path)
+
+    # Load known encodings for students in the selected class
+    students_in_class = list(students_collection.find({"class_id": ObjectId(class_id)}))
+    known_encodings = []
+    roll_numbers = []
+    student_info = {}
+    
+    for student in students_in_class:
+        roll_no = student['roll_no']
+        encoding_path = os.path.join('encodings', f"{roll_no}.pkl")
+        if os.path.exists(encoding_path):
+            with open(encoding_path, 'rb') as f:
+                data = pickle.load(f)
+                known_encodings.append(data["encoding"])
+                roll_numbers.append(roll_no)
+                student_info[roll_no] = {
+                    'name': student['name'],
+                    'roll_no': roll_no,
+                    'photo_path': student.get('photo_path', '')
+                }
+
+    # Process the frame for face recognition
+    img = face_recognition.load_image_file(frame_path)
+    face_locations = face_recognition.face_locations(img)
+    face_encodings = face_recognition.face_encodings(img, face_locations)
+
+    recognized_students = []
+    for face_encoding in face_encodings:
+        matches = face_recognition.compare_faces(known_encodings, face_encoding, tolerance=0.5)
+        for idx, match in enumerate(matches):
+            if match:
+                roll_no = roll_numbers[idx]
+                student = student_info.get(roll_no)
+                if student and student not in recognized_students:
+                    recognized_students.append(student)
+
+    # Clean up temp file
+    try:
+        os.remove(frame_path)
+    except:
+        pass
+
+    return jsonify({'recognized_students': recognized_students})
+
+@app.route('/save_live_attendance', methods=['POST'])
+@login_required
+def save_live_attendance():
+    data = request.json
+    class_id = data.get('class_id')
+    recognized_students = data.get('recognized_students', [])
+
+    if not class_id:
+        return jsonify({'error': 'No class selected'}), 400
+
+    # Get all students in the class
+    students_in_class = list(students_collection.find({"class_id": ObjectId(class_id)}))
+    
+    # Current timestamp
+    today = datetime.now().strftime('%Y-%m-%d')
+    now_time = datetime.now().strftime('%H:%M:%S')
+
+    # Mark attendance for all students
+    records_to_insert = []
+    recognized_roll_numbers = [student['roll_no'] for student in recognized_students]
+    
+    for student in students_in_class:
+        record = {
+            'date': today,
+            'time': now_time,
+            'source': 'live',
+            'class_id': ObjectId(class_id),
+            'roll_no': student['roll_no'],
+            'name': student['name'],
+            'status': 'Present' if student['roll_no'] in recognized_roll_numbers else 'Absent'
+        }
+        records_to_insert.append(record)
+    
+    if records_to_insert:
+        attendance_collection.insert_many(records_to_insert)
+        # Save to Excel
+        excel_path = save_to_excel(class_id, records_to_insert)
+        
+    return jsonify({
+        'success': True,
+        'message': f'Attendance marked for {len(recognized_students)} students',
+        'date': today,
+        'time': now_time
+    })
+
+@app.route('/download_excel/<class_name>')
+@login_required
+def download_excel(class_name):
+    safe_class_name = "".join(c for c in class_name if c.isalnum() or c in (' ', '-', '_')).strip()
+    excel_filename = f"{safe_class_name}_attendance.xlsx"
+    excel_path = os.path.join('static', 'attendance_sheets', excel_filename)
+    
+    if not os.path.exists(excel_path):
+        flash('Excel file not found', 'error')
+        return redirect(url_for('view_attendance'))
+        
+    return send_from_directory(
+        'static/attendance_sheets',
+        excel_filename,
+        as_attachment=True,
+        download_name=excel_filename
+    )
 
 if __name__ == "__main__":
     app.run(debug=True)

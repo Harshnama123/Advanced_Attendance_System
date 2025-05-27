@@ -1,0 +1,37 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Environment
+.env
+.venv
+env/
+venv/
+ENV/
+
+# IDE
+.idea/
+.vscode/
+
+# Database
+*.db
+*.sqlite3
+
+# Media
+flaskattendance/static/class_photos/*
+flaskattendance/static/student_photos/*
+!flaskattendance/static/class_photos/.gitkeep
+!flaskattendance/static/student_photos/.gitkeep
+
+# Cache and temporary files
+*.log
+.DS_Store
+Thumbs.db
+
+# Face encodings (since they can be regenerated)
+flaskattendance/encodings/*.pkl
+
+# Excel files (they can be regenerated)
+flaskattendance/static/attendance_sheets/*.xlsx
