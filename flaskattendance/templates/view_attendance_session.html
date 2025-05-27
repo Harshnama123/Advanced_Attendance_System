@@ -127,11 +127,14 @@
             <div class="d-flex justify-content-between align-items-center">
                 <div class="text-muted">
                     <i class="fas fa-info-circle me-2"></i>Attendance marked via {{ source }} method
+                </div>                {% if records %}
+                <div class="d-flex gap-2">
+                    <button class="btn btn-primary" onclick="window.print()">
+                        <i class="fas fa-print me-2"></i>Print Report
+                    </button>                    <a href="{{ url_for('download_excel', class_name=class_name) }}" class="btn btn-success">
+                        <i class="fas fa-file-excel me-2"></i>Download Excel Sheet
+                    </a>
                 </div>
-                {% if records %}
-                <button class="btn btn-primary" onclick="window.print()">
-                    <i class="fas fa-print me-2"></i>Print Report
-                </button>
                 {% endif %}
             </div>
         </div>

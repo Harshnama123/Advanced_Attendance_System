@@ -110,9 +110,7 @@
                     </a>
                 </div>
             </div>
-        </div>
-
-        <div class="col-md-6 col-lg-4">
+        </div>        <div class="col-md-6 col-lg-4">
             <div class="card h-100">
                 <div class="card-body text-center p-4">
                     <i class="fas fa-camera fa-3x text-danger mb-3"></i>
@@ -120,6 +118,19 @@
                     <p class="card-text text-muted mb-4">Mark attendance using images</p>
                     <a href="{{ url_for('mark_attendance_image') }}" class="btn btn-danger w-100">
                         <i class="fas fa-image me-2"></i>Mark with Image
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-6 col-lg-4">
+            <div class="card h-100">
+                <div class="card-body text-center p-4">
+                    <i class="fas fa-video fa-3x text-info mb-3"></i>
+                    <h4 class="card-title mb-3">Webcam Attendance</h4>
+                    <p class="card-text text-muted mb-4">Mark attendance using live webcam</p>
+                    <a href="{{ url_for('live_attendance') }}" class="btn btn-info w-100 text-white">
+                        <i class="fas fa-video me-2"></i>Mark with Webcam
                     </a>
                 </div>
             </div>
