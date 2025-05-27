@@ -1,0 +1,20 @@
+services:
+  - type: web
+    name: flaskattendance
+    env: python
+    region: oregon  # Choose the region closest to your users
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn --config gunicorn.conf.py app:app
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.10.0
+      - key: MONGO_URI
+        sync: false  # This will be set in Render dashboard
+      - key: SECRET_KEY
+        generateValue: true  # This will auto-generate a secure key
+      - key: FLASK_ENV
+        value: production
+    disk:
+      name: flaskattendance-data
+      mountPath: /opt/render/project/src/static
+      sizeGB: 1
