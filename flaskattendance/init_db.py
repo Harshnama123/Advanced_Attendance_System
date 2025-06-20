@@ -1,4 +1,4 @@
-from database import teachers_collection
+from .database import teachers_collection
 from datetime import datetime
 
 def init_db():

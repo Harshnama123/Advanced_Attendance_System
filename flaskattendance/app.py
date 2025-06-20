@@ -1,6 +1,6 @@
 from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, send_from_directory
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
-from database import teachers_collection, students_collection, classes_collection, attendance_collection
+from .database import teachers_collection, students_collection, classes_collection, attendance_collection
 from bson.objectid import ObjectId
 import os
 from dotenv import load_dotenv
@@ -8,8 +8,8 @@ import uuid
 from flask import Flask, render_template, request, redirect, session, url_for
 from pymongo import MongoClient
 # New import at the top
-from encode_faces import register_face, delete_face_encoding
-from database import attendance_collection
+from .encode_faces import register_face, delete_face_encoding
+from .database import attendance_collection
 from datetime import datetime
 import face_recognition
 import numpy as np
@@ -25,7 +25,7 @@ import os.path
 load_dotenv()
 
 # Initialize database with admin user
-from init_db import init_db
+from .init_db import init_db
 init_db()
 
 # Create directory for Excel sheets
@@ -841,7 +841,7 @@ def process_frame():
 
     class_id = request.form.get('class_id')
     if not class_id:
-        return jsonify({'error': 'No class selected'}), 400
+        return jsonify({'error': 'No class_id provided'}), 400
 
     frame = request.files['frame']
     frame_path = os.path.join('static/class_photos', 'temp_frame.jpg')
@@ -863,8 +863,7 @@ def process_frame():
                 roll_numbers.append(roll_no)
                 student_info[roll_no] = {
                     'name': student['name'],
-                    'roll_no': roll_no,
-                    'photo_path': student.get('photo_path', '')
+                    'roll_no': roll_no
                 }
 
     # Process the frame for face recognition
@@ -875,12 +874,11 @@ def process_frame():
     recognized_students = []
     for face_encoding in face_encodings:
         matches = face_recognition.compare_faces(known_encodings, face_encoding, tolerance=0.5)
-        for idx, match in enumerate(matches):
+        for i, match in enumerate(matches):
             if match:
-                roll_no = roll_numbers[idx]
-                student = student_info.get(roll_no)
-                if student and student not in recognized_students:
-                    recognized_students.append(student)
+                recognized_roll = roll_numbers[i]
+                if student_info.get(recognized_roll):
+                    recognized_students.append(student_info[recognized_roll])
 
     # Clean up temp file
     try:
@@ -898,60 +896,54 @@ def save_live_attendance():
     recognized_students = data.get('recognized_students', [])
 
     if not class_id:
-        return jsonify({'error': 'No class selected'}), 400
+        return jsonify({'error': 'No class_id provided'}), 400
 
     # Get all students in the class
     students_in_class = list(students_collection.find({"class_id": ObjectId(class_id)}))
     
     # Current timestamp
     today = datetime.now().strftime('%Y-%m-%d')
-    now_time = datetime.now().strftime('%H:%M:%S')
-
-    # Mark attendance for all students
-    records_to_insert = []
-    recognized_roll_numbers = [student['roll_no'] for student in recognized_students]
-    
+    now_time = datetime.now().strftime('%H:%M:%S')    # Mark attendance for all students
     for student in students_in_class:
         record = {
             'date': today,
             'time': now_time,
-            'source': 'live',
+            'source': 'webcam',
             'class_id': ObjectId(class_id),
             'roll_no': student['roll_no'],
             'name': student['name'],
-            'status': 'Present' if student['roll_no'] in recognized_roll_numbers else 'Absent'
+            'status': 'Present' if student['roll_no'] in recognized_students else 'Absent'
         }
-        records_to_insert.append(record)
-    
-    if records_to_insert:
-        attendance_collection.insert_many(records_to_insert)
-        # Save to Excel
-        excel_path = save_to_excel(class_id, records_to_insert)
-        
-    return jsonify({
-        'success': True,
-        'message': f'Attendance marked for {len(recognized_students)} students',
+        attendance_collection.insert_one(record)    # Save to Excel
+    attendance_records = list(attendance_collection.find({
         'date': today,
-        'time': now_time
-    })
+        'time': now_time,
+        'class_id': ObjectId(class_id)
+    }))
+    excel_path = save_to_excel(class_id, attendance_records)
+    
+    if excel_path:
+        flash(f"Attendance saved to Excel file: {excel_path}")
+    else:
+        flash("Warning: Could not save to Excel file", "warning")
+
+    return jsonify({'success': True})
 
 @app.route('/download_excel/<class_name>')
 @login_required
 def download_excel(class_name):
+    # Sanitize class name for filename
     safe_class_name = "".join(c for c in class_name if c.isalnum() or c in (' ', '-', '_')).strip()
-    excel_filename = f"{safe_class_name}_attendance.xlsx"
-    excel_path = os.path.join('static', 'attendance_sheets', excel_filename)
+    filename = f"{safe_class_name}_attendance.xlsx"
+    excel_path = os.path.join(EXCEL_FOLDER, filename)
     
-    if not os.path.exists(excel_path):
-        flash('Excel file not found', 'error')
-        return redirect(url_for('view_attendance'))
-        
-    return send_from_directory(
-        'static/attendance_sheets',
-        excel_filename,
-        as_attachment=True,
-        download_name=excel_filename
-    )
+    if os.path.exists(excel_path):
+        return send_from_directory(directory=os.path.abspath(os.path.dirname(excel_path)),
+                                 path=filename,
+                                 as_attachment=True)
+    else:
+        flash('Excel file not found.', 'error')
+        return redirect(request.referrer or url_for('view_attendance'))
 
 if __name__ == "__main__":
     app.run(debug=True)
