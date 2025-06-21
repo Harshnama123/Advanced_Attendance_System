@@ -1,5 +1,5 @@
 # Use a prebuilt image with dlib and face-recognition to avoid memory issues
-FROM bamos/face-recognition:latest
+FROM ageitgey/face_recognition:latest
 
 # Set work directory
 WORKDIR /app
