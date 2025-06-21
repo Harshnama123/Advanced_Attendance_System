@@ -1,15 +1,5 @@
-# Use official Python image
-FROM python:3.10-slim
-
-# Set environment variables
-ENV PYTHONDONTWRITEBYTECODE=1
-ENV PYTHONUNBUFFERED=1
-
-# Install system dependencies
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
-        python3-dev cmake libsm6 libxext6 libxrender-dev libglib2.0-0 build-essential && \
-    rm -rf /var/lib/apt/lists/*
+# Use a prebuilt image with dlib and face-recognition to avoid memory issues
+FROM bamos/face-recognition:latest
 
 # Set work directory
 WORKDIR /app
@@ -17,7 +7,7 @@ WORKDIR /app
 # Copy requirements
 COPY requirements.txt ./
 
-# Install Python dependencies
+# Install Python dependencies (dlib and face-recognition are already installed)
 RUN pip install --upgrade pip && \
     pip install -r requirements.txt
 
