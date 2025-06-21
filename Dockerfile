@@ -1,5 +1,10 @@
-# Use a prebuilt image with dlib and face-recognition to avoid memory issues
-FROM ageitgey/face_recognition:latest
+# Use official Python slim image
+FROM python:3.10-slim
+
+# Install system dependencies for dlib, face-recognition, and OpenCV
+RUN apt-get update && \
+    apt-get install -y build-essential cmake libopenblas-dev liblapack-dev libx11-dev libgtk-3-dev libboost-python-dev libboost-thread-dev libsm6 libxext6 libxrender-dev python3-dev && \
+    pip install --upgrade pip
 
 # Set work directory
 WORKDIR /app
@@ -7,9 +12,8 @@ WORKDIR /app
 # Copy requirements
 COPY requirements.txt ./
 
-# Install Python dependencies (dlib and face-recognition are already installed)
-RUN pip install --upgrade pip && \
-    pip install -r requirements.txt
+# Install Python dependencies
+RUN pip install -r requirements.txt
 
 # Copy project files
 COPY . .
